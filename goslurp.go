@@ -1,15 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"log"
+	"os"
 
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
@@ -18,21 +18,27 @@ type Config struct {
 	Queue_url          *string
 	Message_attributes []*string
 	Region             *string
+	Export_as          *string
+	Export_path        *string
 }
 
 // Get Message Function
 // Takes SQS Object, Queue_url, and Message Attributes
 // Returns a ReceiveMessageOutput Struct and Errors
-func getMessage(queue *sqs.SQS, queue_url *string, message_attributes []*string) (sqs.ReceiveMessageOutput, error) {
+func getMessage(queue *sqs.SQS, queue_url *string, message_attributes []*string) (sqs.Message, error) {
 
 	// Params object of ReceiveMessageInput Struct
 	params := &sqs.ReceiveMessageInput{
 		QueueURL:              queue_url,
 		MessageAttributeNames: message_attributes,
 		MaxNumberOfMessages:   aws.Long(1),
+		VisibilityTimeout:     aws.Long(1),
+		WaitTimeSeconds:       aws.Long(1),
 	}
 	resp, err := queue.ReceiveMessage(params)
-	return *resp, err
+
+	message := *resp.Messages[0]
+	return message, err
 }
 
 // Load Config Function
@@ -66,6 +72,16 @@ func (c Config) getRegion() *string {
 	return c.Region
 }
 
+// Type Method to return Export Type
+func (c Config) getExport() *string {
+	return c.Export_as
+}
+
+// Type Method to return Export Path
+func (c Config) getExportPath() *string {
+	return c.Export_path
+}
+
 // catchError Function to correctly parse any AWS errors returned from go-aws-sdk
 func catchError(err error) {
 	if awsErr, ok := err.(awserr.Error); ok {
@@ -78,6 +94,37 @@ func catchError(err error) {
 	} else {
 		log.Fatal(err.Error())
 	}
+}
+
+func exportMessage(message sqs.Message, c Config) {
+	path := c.Export_path
+	export_type := c.Export_as
+
+	if path == nil || export_type == nil {
+		panic("Export Path and Export Type are not defined!")
+	}
+
+	if *export_type == "json" {
+		exportJSON(message, path)
+	} else {
+		panic("Unsupported Export Type")
+	}
+}
+
+func exportJSON(message sqs.Message, path *string) {
+	message_json, err := json.Marshal(&message)
+
+	json_file, err := os.Create(*path)
+
+	defer json_file.Close()
+
+	json_file.Write(message_json)
+	json_file.Close()
+
+	if err != nil {
+		catchError(err)
+	}
+
 }
 
 func main() {
@@ -100,13 +147,10 @@ func main() {
 	// Retrieve a message from the queue
 	message, err := getMessage(queue, queue_url, message_attr)
 
+	exportMessage(message, config)
+
 	if err != nil {
 		catchError(err)
 	}
 
-	// Print the Message
-	// Would love to abstract this awsutil call, but
-	// sqs.ReceiveMessageOutput.String() cannot be found, even though it's here:
-	// https://github.com/aws/aws-sdk-go/blob/master/service/sqs/api.go#L1639
-	fmt.Println(awsutil.StringValue(message))
 }

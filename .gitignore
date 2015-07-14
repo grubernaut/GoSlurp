@@ -1,2 +1,3 @@
 goslurp
-config.yml
+*.yml
+*.json
