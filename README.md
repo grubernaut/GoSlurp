@@ -1,6 +1,8 @@
 GoSlurp
 =======
 
+This is meant as a side project to teach myself Go. This definitely needs a lot of work, and I probably picked something a little too complex for my first foray into learning Go. Any help or contributions would be greatly appreciated :) :heart: 
+
 Basic utility to slurp messages off of an SQS queue and place them into a database.
 
 Goal: To be a fully configurable, lightweight, SQS polling service
