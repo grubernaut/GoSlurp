@@ -42,3 +42,10 @@ Currently config only supports String attributes
   * Postgres
 * Better Documentation
 * Test Suite
+
+
+## Things People have said about GoSlurp
+
+* "Cool that looks like it was fun to make"
+* "That's Baddass!"
+* "Looks horrible. Who would make such a thing?"
