@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"log"
-	"reflect"
+	"os"
 
 	"gopkg.in/yaml.v2"
 
@@ -18,7 +18,8 @@ type Config struct {
 	Queue_url          *string
 	Message_attributes []*string
 	Region             *string
-	Outputs            []string
+	Export_as          *string
+	Export_path        *string
 }
 
 // Get Message Function
@@ -36,7 +37,6 @@ func getMessage(queue *sqs.SQS, queue_url *string, message_attributes []*string)
 	}
 	resp, err := queue.ReceiveMessage(params)
 
-	//	fmt.Println(reflect.ValueOf(resp.Messages).Kind())
 	message := *resp.Messages[0]
 	return message, err
 }
@@ -72,9 +72,14 @@ func (c Config) getRegion() *string {
 	return c.Region
 }
 
-// Type Method to return Specified Outputs
-func (c Config) getOutputs() []string {
-	return c.Outputs
+// Type Method to return Export Type
+func (c Config) getExport() *string {
+	return c.Export_as
+}
+
+// Type Method to return Export Path
+func (c Config) getExportPath() *string {
+	return c.Export_path
 }
 
 // catchError Function to correctly parse any AWS errors returned from go-aws-sdk
@@ -91,42 +96,35 @@ func catchError(err error) {
 	}
 }
 
-// Function to Check if slice of strings contains a string
-func contains(s []string, c string) bool {
-	for _, a := range s {
-		if a == c {
-			return true
-		}
+func exportMessage(message sqs.Message, c Config) {
+	path := c.Export_path
+	export_type := c.Export_as
+
+	if path == nil || export_type == nil {
+		panic("Export Path and Export Type are not defined!")
 	}
-	return false
-}
 
-// Print Outputs Function to only print specified outputs
-func printOutputs(message sqs.Message, outputs []string) {
-
-	valid_outputs := validOutputs(message)
-
-	for _, output := range outputs {
-		// if supplied output is valid, print it
-		if contains(valid_outputs, output) {
-			//				fmt.Println(*message.Body)
-
-			//fmt.Println(f)
-			fmt.Println(reflect.ValueOf(message).FieldByName("Body"))
-		}
+	if *export_type == "json" {
+		exportJSON(message, path)
+	} else {
+		panic("Unsupported Export Type")
 	}
 }
 
-// Function that takes the received message and returns a slice
-// of field names from returned Messages Struct via power of reflection.
-func validOutputs(message sqs.Message) []string {
-	valid_outputs := make([]string, 0)
-	s := reflect.ValueOf(message)
-	typeOfMessage := s.Type()
-	for i := 0; i < s.NumField(); i++ {
-		valid_outputs = append(valid_outputs, typeOfMessage.Field(i).Name)
+func exportJSON(message sqs.Message, path *string) {
+	message_json, err := json.Marshal(&message)
+
+	json_file, err := os.Create(*path)
+
+	defer json_file.Close()
+
+	json_file.Write(message_json)
+	json_file.Close()
+
+	if err != nil {
+		catchError(err)
 	}
-	return valid_outputs
+
 }
 
 func main() {
@@ -142,7 +140,6 @@ func main() {
 	message_attr := config.getAttributes()
 	// Need to dereference the region pointer to pass to &aws.Config
 	region := *config.getRegion()
-	outputs := config.getOutputs()
 
 	// Create new sqs queue Object with Config Supplied
 	queue := sqs.New(&aws.Config{Region: region})
@@ -150,7 +147,7 @@ func main() {
 	// Retrieve a message from the queue
 	message, err := getMessage(queue, queue_url, message_attr)
 
-	printOutputs(message, outputs)
+	exportMessage(message, config)
 
 	if err != nil {
 		catchError(err)

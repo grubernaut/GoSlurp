@@ -16,7 +16,11 @@ queue_url: "<sqs_queue url>"
 message_attributes:
   - "Attribute"
   - "Another Attribute"
+export_as: "json"
+export_path: "output.json"
 ```
+
+You can currently export any messages found into a json file. Work will probably continue on this, so that json values aren't duplicated if the tool is ran as a daemon
 
 Currently config only supports String attributes
 
